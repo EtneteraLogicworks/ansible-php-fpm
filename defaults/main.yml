@@ -1,0 +1,12 @@
+---
+# Ansible vars
+#
+# Default variables for php-fpm role
+
+php_default_version: '{{ php_installed_versions[0] }}'
+php_installed_versions:
+  - '7.3'
+
+php_extra_parameters: {}
+
+...

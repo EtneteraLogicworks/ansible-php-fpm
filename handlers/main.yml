@@ -1,0 +1,13 @@
+---
+# Ansible handlers
+#
+
+- name: Reload php-fpm
+  service:
+    name: 'php{{ php_version }}-fpm'
+    state: reloaded
+  loop: '{{ php_installed_versions }}'
+  loop_control:
+    loop_var: php_version
+
+...

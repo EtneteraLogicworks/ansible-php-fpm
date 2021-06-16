@@ -1,0 +1,125 @@
+---
+# Ansible role
+#
+# Install and configure php-fpm in given version(s)
+
+- name: Add deb.sury.org repository for php
+  block:
+    - name: Install requirements
+      apt:
+        name: '{{ debsury_requirements }}'
+        state: present
+
+    - name: Add deb.sury.org repo key
+      environment: '{{ proxy_env|default({}) }}'
+      apt_key:
+        url: '{{ debsury_key_url }}'
+        state: present
+
+    - name: Revoke old keys
+      apt_key:
+        id: '{{ item }}'
+        state: absent
+      loop: '{{ debsury_revoked_keys }}'
+
+    - name: Add deb.sury.org repo
+      apt_repository:
+        repo: '{{ debsury_repo }}'
+        state: present
+        filename: 'php'
+
+  tags:
+    - apt
+    - debsury
+
+
+- name: Install php packages
+  block:
+    - name: Install php-fpm in desired versions
+      apt:
+        name:
+          - 'php{{ php_version }}-fpm'
+        state: present
+      loop: '{{ php_installed_versions }}'
+      loop_control:
+        loop_var: php_version
+
+    - name: Install php extensions for desired versions
+      apt:
+        name: '{{ ["php"+php_version] | product(php_extensions) | map("join", "-") | list }}'
+        state: present
+      when: php_extensions is defined
+      loop: '{{ php_installed_versions }}'
+      loop_control:
+        loop_var: php_version
+
+  tags:
+    - apt
+
+
+- name: Configure php
+  block:
+    - name: Configure default php version
+      alternatives:
+        name: 'php'
+        path: '/usr/bin/php{{ php_default_version }}'
+
+    - name: Configure timezone
+      template:
+        src: 'php-timezone.ini.j2'
+        dest: '/etc/php/{{ item[0] }}/{{ item[1] }}/conf.d/99-timezone.ini'
+        owner: 'root'
+        group: 'root'
+        mode: '0644'
+      notify: Reload php-fpm
+      with_nested:
+        - '{{ php_installed_versions }}'
+        - [ 'cli', 'fpm' ]
+
+  tags:
+    - config
+
+
+- name: Prepare logging for php
+  block:
+    - name: Create directory for logs
+      file:
+        dest: '/var/log/php{{ php_version }}-fpm'
+        state: directory
+        owner: 'root'
+        group: 'root'
+        mode: '0755'
+      loop: '{{ php_installed_versions }}'
+      loop_control:
+        loop_var: php_version
+
+    - name: Configure logrotate
+      template:
+        src: 'fpm_logrotate.conf.j2'
+        dest: '/etc/logrotate.d/php{{ php_version }}-fpm_pools'
+        owner: 'root'
+        group: 'root'
+        mode: '0644'
+      loop: '{{ php_installed_versions }}'
+      loop_control:
+        loop_var: php_version
+
+  tags:
+    - logs
+
+
+- name: Create default php pool
+  template:
+    src: 'default_pool.conf.j2'
+    dest: '/etc/php/{{ php_version }}/fpm/pool.d/www.conf'
+    owner: 'root'
+    group: 'root'
+    mode: '0644'
+  notify: Reload php-fpm
+  loop: '{{ php_installed_versions }}'
+  loop_control:
+    loop_var: php_version
+  tags:
+    - config
+
+...

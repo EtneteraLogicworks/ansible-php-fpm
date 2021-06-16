@@ -1,0 +1,14 @@
+## logrotate.conf
+#
+
+/var/log/php{{ php_version }}-fpm/*.log {
+    rotate 12
+    weekly
+    missingok
+    notifempty
+    compress
+    delaycompress
+    postrotate
+        /usr/lib/php/php{{ php_version }}-fpm-reopenlogs
+    endscript
+}
